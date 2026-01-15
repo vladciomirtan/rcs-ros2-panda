@@ -10,64 +10,86 @@
  * Date: January 2026
  */
 
+#include <geometry_msgs/msg/pose.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
-#include <geometry_msgs/msg/pose.hpp>
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
-  auto const node = std::make_shared<rclcpp::Node>(
-    "pick_place_node",
-    rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true)
-  );
+  auto const node = std::make_shared<rclcpp::Node>("pick_place_node", 
+    rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true));
 
-  // Use a thread to allow MoveIt to process callbacks
   rclcpp::executors::SingleThreadedExecutor executor;
   executor.add_node(node);
   std::thread([&executor]() { executor.spin(); }).detach();
 
-  // 1. Setup Planning Interfaces
-  moveit::planning_interface::MoveGroupInterface move_group(node, "panda_arm");
+  moveit::planning_interface::MoveGroupInterface arm_group(node, "panda_arm");
+  moveit::planning_interface::MoveGroupInterface hand_group(node, "hand");
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
 
-  // 2. Define the Cube (Collision Object)
-  moveit_msgs::msg::CollisionObject collision_object;
-  collision_object.header.frame_id = move_group.getPlanningFrame();
-  collision_object.id = "cube";
+  // --- RESET SIMULATION ---
+  // 1. Release the object in software
+  arm_group.detachObject("cube");
 
-  shape_msgs::msg::SolidPrimitive primitive;
-  primitive.type = primitive.BOX;
-  primitive.dimensions = {0.05, 0.05, 0.05}; // 5cm cube
+  // 2. Open the fingers
+  hand_group.setNamedTarget("open");
+  hand_group.move();
 
-  geometry_msgs::msg::Pose box_pose;
-  box_pose.orientation.w = 1.0;
-  box_pose.position.x = 0.4; // 40cm in front of robot
-  box_pose.position.y = 0.0;
-  box_pose.position.z = 0.025; // Sitting on the ground plane
+  // 3. Remove from the world if you want to 'delete' it
+  std::vector<std::string> object_ids;
+  object_ids.push_back("cube");
+  planning_scene_interface.removeCollisionObjects(object_ids);
 
-  collision_object.primitives.push_back(primitive);
-  collision_object.primitive_poses.push_back(box_pose);
-  collision_object.operation = collision_object.ADD;
+  // 4. Now reset the arm
+  arm_group.setNamedTarget("ready");
+  arm_group.move();
 
-  // 3. Add the cube to the world
-  planning_scene_interface.applyCollisionObject(collision_object);
 
-  // 4. Plan to a position above the cube (The "Lift" or Pre-Grasp)
-  geometry_msgs::msg::Pose target_pose;
-  target_pose.orientation.w = 0.0; // Pointing down
-  target_pose.orientation.x = 1.0;
-  target_pose.position.x = 0.4;
-  target_pose.position.y = 0.0;
-  target_pose.position.z = 0.3; // 30cm high
+  // --- STEP 1: Add the Cube ---
+  moveit_msgs::msg::CollisionObject cube;
+  cube.header.frame_id = arm_group.getPlanningFrame();
+  cube.id = "cube";
+  shape_msgs::msg::SolidPrimitive prim;
+  prim.type = prim.BOX;
+  prim.dimensions = {0.05, 0.05, 0.05};
+  geometry_msgs::msg::Pose box_p;
+  box_p.orientation.w = 1.0;
+  box_p.position.x = 0.4; box_p.position.y = 0.0; box_p.position.z = 0.025;
+  cube.primitives.push_back(prim);
+  cube.primitive_poses.push_back(box_p);
+  cube.operation = cube.ADD;
 
-  move_group.setPoseTarget(target_pose);
+  // Apply and wait a moment for the scene to update
+  planning_scene_interface.applyCollisionObject(cube);
+  rclcpp::sleep_for(std::chrono::seconds(2)); 
 
-  moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-  if (bool(move_group.plan(my_plan))) {
-    move_group.execute(my_plan);
-  }
+  // --- STEP 2: Execute Task ---
+  // 1. Open Hand
+  hand_group.setNamedTarget("open");
+  hand_group.move();
+
+  // 2. Pre-Grasp Pose
+  geometry_msgs::msg::Pose target;
+  target.orientation.x = 1.0; // Gripper pointing down
+  target.position.x = 0.4; target.position.y = 0.0; target.position.z = 0.25;
+  
+  arm_group.setPoseTarget(target);
+  arm_group.move();
+
+  // 3. Grasp (Close)
+  hand_group.setNamedTarget("close");
+  hand_group.move();
+
+  // 4. Attach & Lift
+  std::vector<std::string> touch_links;
+  touch_links.push_back("panda_leftfinger");
+  touch_links.push_back("panda_rightfinger");
+
+  arm_group.attachObject("cube", "panda_hand", touch_links);
+  target.position.z = 0.5;
+  arm_group.setPoseTarget(target);
+  arm_group.move();
 
   rclcpp::shutdown();
   return 0;
