@@ -10,18 +10,19 @@ find_package(geometry_msgs REQUIRED)
 # Define the executable
 add_executable(pick_place_node src/pick_place_node.cpp)
 
-# Link MoveIt2 and ROS2 dependencies
-target_link_libraries(pick_place_node PRIVATE
-  moveit_ros_planning_interface::moveit_ros_planning_interface
-)
-
+# Use ament_target_dependencies for all ROS2/MoveIt2 libs to avoid keyword conflicts
 ament_target_dependencies(pick_place_node
   rclcpp
+  moveit_ros_planning_interface
   geometry_msgs
 )
 
 # Standard ROS2 installation paths
 install(TARGETS pick_place_node
   DESTINATION lib/${PROJECT_NAME})
+
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
 
 ament_package()
