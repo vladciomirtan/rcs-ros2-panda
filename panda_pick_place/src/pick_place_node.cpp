@@ -73,8 +73,7 @@ int main(int argc, char** argv) {
   target.position.x = 0.4; 
   target.position.y = 0.0; 
   target.position.z = 0.30;
-
-  arm_group.setPlanningTime(10.0);
+  
   arm_group.setPoseTarget(target);
   arm_group.move();
 
