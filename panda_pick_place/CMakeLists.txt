@@ -6,6 +6,8 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 # Define the executable
 add_executable(pick_place_node src/pick_place_node.cpp)
@@ -15,6 +17,8 @@ ament_target_dependencies(pick_place_node
   rclcpp
   moveit_ros_planning_interface
   geometry_msgs
+  tf2
+  tf2_geometry_msgs
 )
 
 # Standard ROS2 installation paths
