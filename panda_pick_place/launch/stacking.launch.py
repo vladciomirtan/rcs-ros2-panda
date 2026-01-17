@@ -4,15 +4,13 @@ from launch_ros.actions import Node
 from moveit_configs_utils import MoveItConfigsBuilder
 
 def generate_launch_description():
-    # 1. Load the robot configuration (URDF, SRDF, etc.)
-    # This matches the 'panda' robot from your installed config package
+    # 1. Load the robot configuration
     moveit_config = MoveItConfigsBuilder("panda", package_name="moveit_resources_panda_moveit_config").to_moveit_configs()
 
-    # 2. Define the Node
-    # This passes all the necessary robot parameters to your C++ executable
-    run_move_group_node = Node(
+    # 2. Define the Stacking Node
+    run_stacking_node = Node(
         package="panda_pick_place",
-        executable="pick_place_node",
+        executable="stacking_node",
         output="screen",
         parameters=[
             moveit_config.to_dict(),
@@ -20,5 +18,5 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        run_move_group_node,
+        run_stacking_node,
     ])
